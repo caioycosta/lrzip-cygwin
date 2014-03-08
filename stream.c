@@ -1468,11 +1468,13 @@ static bool clear_buffer(rzip_control *control, struct stream_info *sinfo, int s
 	}
 	s->i = i;
 	s->control = control;
+	compthread(s);
+/*
 	if (unlikely((!create_pthread(control, &threads[i], NULL, compthread, s)) ||
 	             (!detach_pthread(control, &threads[i])))) {
 		unlock_mutex(control, &cthread[i].mutex);
 		return false;
-	}
+	}*/
 
 
 	if (newbuf) {
@@ -1486,8 +1488,11 @@ static bool clear_buffer(rzip_control *control, struct stream_info *sinfo, int s
 		sinfo->s[streamno].buflen = 0;
 	}
 
+
 	if (++i == control->threads)
 		i = 0;
+
+	
 	return true;
 }
 
