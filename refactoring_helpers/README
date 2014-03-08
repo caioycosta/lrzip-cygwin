@@ -1,0 +1,6 @@
+Here will find scripts for helping with the refactoring of the code, below is a listing of them.
+
+lock_scope.awk
+To find instances where a lock is acquired but not released in the same scope. 
+see it for details on usage
+
