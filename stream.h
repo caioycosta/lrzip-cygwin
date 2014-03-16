@@ -23,6 +23,8 @@
 #include "lrzip_private.h"
 #include <pthread.h>
 
+#include "ticket_lock.h"
+
 bool create_pthread(rzip_control *control, pthread_t *thread, pthread_attr_t * attr,
 	void * (*start_routine)(void *), void *arg);
 bool join_pthread(pthread_t th, void **thread_return);
@@ -30,6 +32,14 @@ bool init_mutex(rzip_control *control, pthread_mutex_t *mutex);
 bool unlock_mutex(rzip_control *control, pthread_mutex_t *mutex);
 bool lock_mutex(rzip_control *control, pthread_mutex_t *mutex);
 bool wait_mutex(rzip_control *control, pthread_mutex_t *mutex);
+
+bool init_tkt_mutex(rzip_control *control, ticket_lock *mutex);
+bool unlock_tkt_mutex(rzip_control *control, ticket_lock *mutex);
+bool lock_tkt_mutex(rzip_control *control, ticket_lock *mutex);
+bool lock_tkt_mutex_ticket(rzip_control *control, ticket_lock *mutex, unsigned int ticket);
+bool issue_ticket_mutex(rzip_control *control, ticket_lock *mutex, unsigned int *ticket);
+bool wait_tkt_mutex(rzip_control *control, ticket_lock *mutex);
+
 ssize_t write_1g(rzip_control *control, void *buf, i64 len);
 ssize_t read_1g(rzip_control *control, int fd, void *buf, i64 len);
 i64 get_readseek(rzip_control *control, int fd);

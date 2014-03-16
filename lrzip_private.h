@@ -35,6 +35,8 @@
 # include <pthread.h>
 #endif
 
+#include "ticket_lock.h"
+
 #ifdef HAVE_STRING_H
 # include <string.h>
 #endif
@@ -379,7 +381,7 @@ struct rzip_control {
 	unsigned char magic_written;
 	bool lzma_prop_set;
 
-	pthread_mutex_t cksumlock;
+	ticket_lock cksumlock;
 	md5_ctx ctx;
 	uchar md5_resblock[MD5_DIGEST_SIZE];
 	i64 md5_read; // How far into the file the md5 has done so far

@@ -41,6 +41,8 @@ libtmplrzip_la_SOURCES = \
   runzip.h \
   stream.c \
   stream.h \
+  ticket_lock.c \
+  ticket_lock.h \
   util.c \
   util.h \
   md5.c \

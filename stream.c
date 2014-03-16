@@ -124,6 +124,52 @@ bool wait_mutex(rzip_control *control, pthread_mutex_t *mutex)
 	return ret;
 }
 
+bool init_tkt_mutex(rzip_control *control, ticket_lock *mutex)
+{
+        if (unlikely(init_tkt_lock(mutex)))
+                fatal_return(("init_tkt_lock failed"), false);
+        return true;
+}
+
+bool unlock_tkt_mutex(rzip_control *control, ticket_lock *mutex)
+{
+        if (unlikely(unlock_tkt_lock(mutex)))
+                fatal_return(("unlock_tkt_lock failed"), false);
+        return true;
+}
+
+bool lock_tkt_mutex(rzip_control *control, ticket_lock *mutex)
+{
+        if (unlikely(lock_tkt_lock(mutex)))
+                fatal_return(("lock_tkt_lock failed"), false);
+        return true;
+
+}
+
+bool lock_tkt_mutex_ticket(rzip_control *control, ticket_lock *mutex, unsigned int ticket)
+{
+        if (unlikely(lock_with_ticket(mutex, ticket)))
+             fatal_return(("lock_with_ticket failed"), false);
+        return true;
+}
+
+bool issue_ticket_mutex(rzip_control *control, ticket_lock *mutex, unsigned int *ticket)
+{	
+	if (unlikely(issue_ticket(mutex,ticket)))
+                fatal_return(("issue_ticket failed"), false);
+        return true;
+}
+
+bool wait_tkt_mutex(rzip_control *control, ticket_lock *mutex)
+{
+        bool ret;
+        ret = lock_tkt_mutex(control, mutex);
+        if (likely(ret))
+                ret = unlock_tkt_mutex(control, mutex);
+        return ret;
+}
+
+
 static bool cond_wait(rzip_control *control, pthread_cond_t *cond, pthread_mutex_t *mutex)
 {
 	if (unlikely(pthread_cond_wait(cond, mutex)))
