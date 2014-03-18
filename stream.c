@@ -1041,6 +1041,14 @@ retest_malloc:
 	testsize = limit + (control->overhead * control->threads);
 	testmalloc = malloc(testsize);
 	if (!testmalloc) {
+		if (limit == 0) {
+#if defined(_WIN32) || defined(__CYGWIN__)
+			fatal("Couldn't allocate %d bytes of memory\nTry reducing the window size, number of threads or\nchoosing another compression algorithm.\
+\nOn Windows, you can try increasing virtual memory available to applications, see http://msdn.microsoft.com/en-us/library/windows/desktop/bb613473(v=vs.85).aspx ", testsize);
+#else
+			fatal("Couldn't allocate %d bytes of memory\nTry reducing the window size, number of threads or\nchoosing another compression algorithm. ", testsize);
+#endif
+		}	
 		limit = limit / 10 * 9;
 		goto retest_malloc;
 	}

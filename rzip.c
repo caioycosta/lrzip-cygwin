@@ -774,7 +774,7 @@ static inline bool hash_search(rzip_control *control, struct rzip_state *st,
 
 		control->checksum.buf = malloc(control->maxram);
 		if (unlikely(!control->checksum.buf))
-			fatal_return(("Failed to malloc ckbuf in hash_search2\n"), false);
+			fatal_return(("Failed to malloc %d bytes ckbuf in hash_search2\n", control->maxram), false);
 
 		for (i = 0; i < cksum_chunks; i++) {
 			control->do_mcpy(control, control->checksum.buf, cksum_limit, control->maxram);
