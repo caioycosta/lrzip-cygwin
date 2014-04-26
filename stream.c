@@ -59,6 +59,7 @@
 
 #include "util.h"
 #include "lrzip_core.h"
+#include "ticket_lock.h"
 
 #define STREAM_BUFSIZE (1024 * 1024 * 10)
 
@@ -67,7 +68,7 @@ static struct compress_thread{
 	uchar c_type;	/* Compression type */
 	i64 s_len;	/* Data length uncompressed */
 	i64 c_len;	/* Data length compressed */
-	pthread_mutex_t mutex; /* This thread's mutex */
+	ticket_lock mutex; /* This thread's mutex */
 	struct stream_info *sinfo;
 	int streamno;
 	uchar salt[SALT_LEN];
@@ -84,6 +85,7 @@ static struct uncomp_thread{
 
 typedef struct stream_thread_struct {
 	int i;
+	unsigned int ticket;
 	rzip_control *control;
 } stream_thread_struct;
 
@@ -945,9 +947,9 @@ bool prepare_streamout_threads(rzip_control *control)
 	}
 
 	for (i = 0; i < control->threads; i++)
-		if (unlikely(!init_mutex(control, &cthread[i].mutex))) {
+		if (unlikely(!init_tkt_mutex(control, &cthread[i].mutex))) {
 			int x;
-			for (x = 0; x < i; x++) pthread_mutex_destroy(&cthread[x].mutex);
+			for (x = 0; x < i; x++) destroy_tkt_lock(&cthread[x].mutex);
 			free(threads);
 			free(cthread);
 			return false;
@@ -963,9 +965,11 @@ bool close_streamout_threads(rzip_control *control)
 	/* Wait for the threads in the correct order in case they end up
 	 * serialised */
 	for (i = 0; i < control->threads; i++) {
-		if (unlikely(!lock_mutex(control, &cthread[close_thread].mutex))) {
+		if (unlikely(!lock_tkt_mutex(control, &cthread[close_thread].mutex))) {
+			// This if will enter if lock fails
+			// but if it succeeds, there is no unlock for it!
 			int x;
-			for (x = 0; x < i; x++) unlock_mutex(control, &cthread[close_thread].mutex);
+			for (x = 0; x < i; x++) unlock_tkt_mutex(control, &cthread[close_thread].mutex);
 			free(cthread);
 			free(threads);
 			return false;
@@ -1310,9 +1314,11 @@ error:
  * backend compression and is then freed here */
 static void *compthread(void *data)
 {
+
 	stream_thread_struct *s = data;
 	rzip_control *control = s->control;
 	long i = s->i;
+	unsigned int ticket = s->ticket;
 	struct compress_thread *cti;
 	struct stream_info *ctis;
 	int waited = 0, ret = 0;
@@ -1320,9 +1326,12 @@ static void *compthread(void *data)
 	int write_len;
 
 	/* Make sure this thread doesn't already exist */
-
+	
 	free(data);
 	cti = &cthread[i];
+	
+	lock_tkt_mutex_ticket(control, &cti->mutex, ticket);
+	
 	ctis = cti->sinfo;
 
 	if (unlikely(setpriority(PRIO_PROCESS, 0, control->nice_val) == -1))
@@ -1494,7 +1503,7 @@ retry:
 	unlock_mutex(control, &output_lock);
 
 error:
-	unlock_mutex(control, &cti->mutex);
+	unlock_tkt_mutex(control, &cti->mutex);
 
 	return NULL;
 }
@@ -1505,7 +1514,10 @@ static bool clear_buffer(rzip_control *control, struct stream_info *sinfo, int s
 	stream_thread_struct *s;
 
 	/* Make sure this thread doesn't already exist */
-	lock_mutex(control, &cthread[i].mutex);
+	// Ticket lock refactoring:
+	// This lock is acquired here, but released inside compthread.                      
+        // This was undefined behavior, so ticket_lock was implemented here. 
+	lock_tkt_mutex(control, &cthread[i].mutex);
 
 	cthread[i].sinfo = sinfo;
 	cthread[i].streamno = streamno;
@@ -1517,26 +1529,26 @@ static bool clear_buffer(rzip_control *control, struct stream_info *sinfo, int s
 
 	s = malloc(sizeof(stream_thread_struct));
 	if (unlikely(!s)) {
-		unlock_mutex(control, &cthread[i].mutex);
+		unlock_tkt_mutex(control, &cthread[i].mutex);
 		fatal_return(("Unable to malloc in clear_buffer"), false);
 	}
 	s->i = i;
 	s->control = control;
-	compthread(s);
-/*
-	if (unlikely((!create_pthread(control, &threads[i], NULL, compthread, s)) ||
+	if (unlikely(!issue_ticket_mutex(control, &cthread[i].mutex, &s->ticket) ||
+	             (!create_pthread(control, &threads[i], NULL, compthread, s)) ||
 	             (!detach_pthread(control, &threads[i])))) {
-		unlock_mutex(control, &cthread[i].mutex);
+		unlock_tkt_mutex(control, &cthread[i].mutex);
 		return false;
-	}*/
+	}
 
+	unlock_tkt_mutex(control, &cthread[i].mutex);
 
 	if (newbuf) {
 		/* The stream buffer has been given to the thread, allocate a
 		 * new one. */
 		sinfo->s[streamno].buf = malloc(sinfo->bufsize);
 		if (unlikely(!sinfo->s[streamno].buf)) {
-			unlock_mutex(control, &cthread[i].mutex);
+			unlock_tkt_mutex(control, &cthread[i].mutex);
 			fatal_return(("Unable to malloc buffer of size %lld in flush_buffer\n", sinfo->bufsize), false);
 		}
 		sinfo->s[streamno].buflen = 0;
@@ -1829,8 +1841,8 @@ int close_stream_out(rzip_control *control, void *ss)
 		int close_thread = output_thread;
 
 		for (i = 0; i < control->threads; i++) {
-			lock_mutex(control, &cthread[close_thread].mutex);
-			unlock_mutex(control, &cthread[close_thread].mutex);
+			lock_tkt_mutex(control, &cthread[close_thread].mutex);
+			unlock_tkt_mutex(control, &cthread[close_thread].mutex);
 			if (++close_thread == control->threads)
 				close_thread = 0;
 		}
